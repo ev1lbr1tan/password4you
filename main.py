@@ -14,9 +14,28 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-def generate_password(length=12):
-    chars = string.ascii_letters + string.digits
+def generate_password(length=12, char_type='letters_digits'):
+    if char_type == 'letters':
+        chars = string.ascii_letters
+    elif char_type == 'letters_digits':
+        chars = string.ascii_letters + string.digits
+    elif char_type == 'all':
+        chars = string.ascii_letters + string.digits + string.punctuation
+    else:
+        chars = string.ascii_letters + string.digits
     return ''.join(secrets.choice(chars) for _ in range(length))
+
+def check_strength(password):
+    score = 0
+    if len(password) >= 8: score += 1
+    if len(password) >= 12: score += 1
+    if any(c.islower() for c in password): score += 1
+    if any(c.isupper() for c in password): score += 1
+    if any(c.isdigit() for c in password): score += 1
+    if any(c in string.punctuation for c in password): score += 1
+    if score <= 3: return "Слабый"
+    elif score <= 5: return "Средний"
+    else: return "Сильный"
 
 @dp.message(Command("start"))
 async def start(message: Message):
@@ -29,33 +48,63 @@ async def start(message: Message):
 @dp.callback_query(lambda c: c.data == "generate")
 async def generate_callback(callback: CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="8 символов", callback_data="length_8")],
-        [InlineKeyboardButton(text="12 символов", callback_data="length_12")],
-        [InlineKeyboardButton(text="16 символов", callback_data="length_16")],
-        [InlineKeyboardButton(text="20 символов", callback_data="length_20")]
+        [InlineKeyboardButton(text="Только буквы", callback_data="type_letters")],
+        [InlineKeyboardButton(text="Буквы + цифры", callback_data="type_letters_digits")],
+        [InlineKeyboardButton(text="Буквы + цифры + символы", callback_data="type_all")]
+    ])
+    await callback.message.edit_text("Выбери тип символов:", reply_markup=keyboard)
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("type_"))
+async def type_callback(callback: CallbackQuery):
+    char_type = callback.data.split("_")[1]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="8 символов", callback_data=f"length_8_type_{char_type}")],
+        [InlineKeyboardButton(text="12 символов", callback_data=f"length_12_type_{char_type}")],
+        [InlineKeyboardButton(text="16 символов", callback_data=f"length_16_type_{char_type}")],
+        [InlineKeyboardButton(text="20 символов", callback_data=f"length_20_type_{char_type}")]
     ])
     await callback.message.edit_text("Выбери длину пароля:", reply_markup=keyboard)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("length_"))
+@dp.callback_query(lambda c: c.data.startswith("length_") and "type_" in c.data)
 async def length_callback(callback: CallbackQuery):
-    length = int(callback.data.split("_")[1])
-    password = generate_password(length)
+    parts = callback.data.split("_")
+    length = int(parts[1])
+    char_type = parts[3]
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Еще один пароль", callback_data=f"regenerate_length_{length}")]
+        [InlineKeyboardButton(text="1 пароль", callback_data=f"count_1_length_{length}_type_{char_type}")],
+        [InlineKeyboardButton(text="3 пароля", callback_data=f"count_3_length_{length}_type_{char_type}")],
+        [InlineKeyboardButton(text="5 паролей", callback_data=f"count_5_length_{length}_type_{char_type}")]
     ])
-    await callback.message.edit_text(f"Ваш пароль: `{password}`", reply_markup=keyboard, parse_mode="Markdown")
+    await callback.message.edit_text("Выбери количество паролей:", reply_markup=keyboard)
     await callback.answer()
 
-@dp.callback_query(lambda c: c.data.startswith("regenerate_length_"))
+@dp.callback_query(lambda c: c.data.startswith("count_"))
+async def count_callback(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    count = int(parts[1])
+    length = int(parts[3])
+    char_type = parts[5]
+    passwords = [generate_password(length, char_type) for _ in range(count)]
+    text = ""
+    for i, pwd in enumerate(passwords, 1):
+        strength = check_strength(pwd)
+        text += f"{i}. `{pwd}` - {strength}\n"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Еще раз", callback_data="regenerate")]
+    ])
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data == "regenerate")
 async def regenerate_callback(callback: CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="8 символов", callback_data="length_8")],
-        [InlineKeyboardButton(text="12 символов", callback_data="length_12")],
-        [InlineKeyboardButton(text="16 символов", callback_data="length_16")],
-        [InlineKeyboardButton(text="20 символов", callback_data="length_20")]
+        [InlineKeyboardButton(text="Только буквы", callback_data="type_letters")],
+        [InlineKeyboardButton(text="Буквы + цифры", callback_data="type_letters_digits")],
+        [InlineKeyboardButton(text="Буквы + цифры + символы", callback_data="type_all")]
     ])
-    await callback.message.edit_text("Выбери длину пароля:", reply_markup=keyboard)
+    await callback.message.edit_text("Выбери тип символов:", reply_markup=keyboard)
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "help")
