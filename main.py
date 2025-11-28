@@ -15,7 +15,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 def generate_password(length=12):
-    chars = string.ascii_letters + string.digits + string.punctuation
+    chars = string.ascii_letters + string.digits
     return ''.join(secrets.choice(chars) for _ in range(length))
 
 @dp.message(Command("start"))
@@ -41,7 +41,21 @@ async def generate_callback(callback: CallbackQuery):
 async def length_callback(callback: CallbackQuery):
     length = int(callback.data.split("_")[1])
     password = generate_password(length)
-    await callback.message.edit_text(f"Ваш пароль: `{password}`\n\nИспользуйте /start для нового.", parse_mode="Markdown")
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Еще один пароль", callback_data=f"regenerate_length_{length}")]
+    ])
+    await callback.message.edit_text(f"Ваш пароль: `{password}`", reply_markup=keyboard, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(lambda c: c.data.startswith("regenerate_length_"))
+async def regenerate_callback(callback: CallbackQuery):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="8 символов", callback_data="length_8")],
+        [InlineKeyboardButton(text="12 символов", callback_data="length_12")],
+        [InlineKeyboardButton(text="16 символов", callback_data="length_16")],
+        [InlineKeyboardButton(text="20 символов", callback_data="length_20")]
+    ])
+    await callback.message.edit_text("Выбери длину пароля:", reply_markup=keyboard)
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "help")
